@@ -170,7 +170,7 @@ void backend_event_loop_run(struct backend_event_loop *del)
     int nfds, i, sleep_time;
 
     struct timeval tv;
-    uint64_t cur_time;
+    uint64_t cur_time = 0;
     struct backend_timeout_handle *timeout = NULL;
     
     while(1){

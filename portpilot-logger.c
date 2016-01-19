@@ -4,6 +4,7 @@
 #include <libusb-1.0/libusb.h>
 #include <sys/epoll.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "portpilot-logger.h"
 #include "backend_event_loop.h"
@@ -39,6 +40,7 @@ static void portpilot_event_cb(void *ptr, int32_t fd, uint32_t events)
     libusb_handle_events_timeout_completed(NULL, &tv, NULL);
 }
 
+#if 0
 static void portpilot_read_cb(struct libusb_transfer *transfer)
 {
     struct portpilot_pkt *ppp = (struct portpilot_pkt*) transfer->buffer;
@@ -80,6 +82,7 @@ static void portpilot_read_data(struct portpilot_ctx *ppc)
 
     libusb_submit_transfer(ppc->transfer);
 }
+#endif
 
 //Get the indexes of the HID interface
 static uint8_t portpilot_get_hid_idx(const struct libusb_config_descriptor *conf_desc,
@@ -132,24 +135,35 @@ static uint8_t portpilot_get_input_info(const struct libusb_interface_descriptor
 }
 
 static int portpilot_event_left(libusb_device *device,
-        struct portpilot_ctx *pp_ctx)
+        struct portpilot_ctx *pp_ctx, uint8_t *path, uint8_t path_len)
 {
+    struct portpilot_dev *pp_dev;
+
     if (!pp_ctx->dev)
+        return 0;
+
+    pp_dev = pp_ctx->dev;
+
+    if (pp_dev->path_len != path_len)
+        return 0;
+
+    if (memcmp(pp_dev->path, path, path_len))
         return 0;
 
     fprintf(stderr, "Will remove device with serial number %s\n",
             pp_ctx->dev->serial_number);
 
     //TODO: Will be replaced with a list delete
-    libusb_close(pp_ctx->dev->handle);
-    free(pp_ctx->dev);
+    libusb_close(pp_dev->handle);
+    free(pp_dev);
     pp_ctx->dev = NULL;
     return 0;
 }
 
 static int portpilot_create_dev(libusb_device *device,
         struct portpilot_ctx *pp_ctx, uint16_t max_packet_size,
-        uint8_t input_endpoint, uint8_t intf_num)
+        uint8_t input_endpoint, uint8_t intf_num, uint8_t *dev_path,
+        uint8_t dev_path_len)
 {
     int32_t retval;
     struct portpilot_dev *pp_dev = NULL;
@@ -166,6 +180,11 @@ static int portpilot_create_dev(libusb_device *device,
 
     pp_dev->max_packet_size = max_packet_size;
     pp_dev->input_endpoint = input_endpoint;
+
+    //This will actually be done earlier!
+    /*pp_dev->path[0] = libusb_get_port_number(device);
+    retval = libusb_get_port_numbers(device, pp_dev->path + 1, 7);
+    pp_dev->path_len = retval + 1;*/
 
     retval = libusb_open(device, &(pp_dev->handle));
 
@@ -212,6 +231,9 @@ static int portpilot_create_dev(libusb_device *device,
         return 0;
     }
 
+    memcpy(pp_dev->path, dev_path, dev_path_len);
+    pp_dev->path_len = dev_path_len;
+
     //Will be a list insert
     pp_ctx->dev = pp_dev;
 
@@ -223,7 +245,7 @@ static int portpilot_create_dev(libusb_device *device,
 }
 
 static int portpilot_event_added(libusb_device *device,
-        struct portpilot_ctx *pp_ctx)
+        struct portpilot_ctx *pp_ctx, uint8_t *dev_path, uint8_t dev_path_len)
 {
 
     uint8_t conf_desc_idx, input_endpoint, intf_num;
@@ -276,7 +298,7 @@ static int portpilot_event_added(libusb_device *device,
     libusb_free_config_descriptor(conf_desc);
     
     return portpilot_create_dev(device, pp_ctx, max_packet_size, input_endpoint,
-            intf_num);
+            intf_num, dev_path, dev_path_len);
 }
 
 //Generic device callback
@@ -284,12 +306,20 @@ int portpilot_cb(libusb_context *ctx, libusb_device *device,
                           libusb_hotplug_event event, void *user_data)
 {
     struct portpilot_ctx *pp_ctx = user_data;
+    int32_t retval;
+    uint8_t dev_path[USB_MAX_PATH];
+    uint8_t dev_path_len;
+
+    //Path is used both on add and remove, so read it already here
+    dev_path[0] = libusb_get_port_number(device);
+    retval = libusb_get_port_numbers(device, dev_path + 1, 7);
+    dev_path_len = retval + 1;
 
     //Decide how to handle this later
     if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT)
-        return portpilot_event_left(device, pp_ctx);
+        return portpilot_event_left(device, pp_ctx, dev_path, dev_path_len);
     else
-        return portpilot_event_added(device, pp_ctx);
+        return portpilot_event_added(device, pp_ctx, dev_path, dev_path_len);
 }
 
 static uint8_t portpilot_configure(struct portpilot_ctx *ppc)

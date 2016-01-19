@@ -9,6 +9,8 @@
 
 #define MAX_USB_STR_LEN 0xFF
 
+#define USB_MAX_PATH 8 //(bus + port numbers (max. 7))
+
 struct backend_event_loop;
 struct backend_epoll_handle;
 struct libusb_device_handle;
@@ -20,6 +22,8 @@ struct portpilot_dev {
     uint8_t serial_number[MAX_USB_STR_LEN+1];
     uint16_t max_packet_size;
     uint8_t input_endpoint;
+    uint8_t path_len;
+    uint8_t path[USB_MAX_PATH];
 };
 
 struct portpilot_ctx {
