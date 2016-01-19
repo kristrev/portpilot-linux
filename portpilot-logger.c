@@ -40,14 +40,22 @@ static void portpilot_event_cb(void *ptr, int32_t fd, uint32_t events)
     libusb_handle_events_timeout_completed(NULL, &tv, NULL);
 }
 
-#if 0
 static void portpilot_read_cb(struct libusb_transfer *transfer)
 {
-    struct portpilot_pkt *ppp = (struct portpilot_pkt*) transfer->buffer;
-    uint8_t i;
+    struct portpilot_dev *pp_dev = transfer->user_data;
+    struct portpilot_pkt *pp_pkt = (struct portpilot_pkt*) transfer->buffer;
+    //uint8_t i;
 
-    if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
-        fprintf(stderr, "Failed to read data from device\n");
+    switch (transfer->status) {
+    case LIBUSB_TRANSFER_COMPLETED:
+        break;
+    case LIBUSB_TRANSFER_ERROR:
+    case LIBUSB_TRANSFER_TIMED_OUT:
+        fprintf(stderr, "Previous transfer failed/timed out, retransmit\n");
+        libusb_submit_transfer(transfer);
+        return;
+    default:
+        fprintf(stderr, "Critical error, what to do?\n");
         return;
     }
 
@@ -56,33 +64,39 @@ static void portpilot_read_cb(struct libusb_transfer *transfer)
         return;
     }
 
+#if 0
     printf("RAW: ");
     for (i = 0; i < transfer->actual_length; i++)
         printf("%x:", transfer->buffer[i]);
     printf("\n");
-    printf("tstamp: %us v_in: %dmV v_out: %dmV current: %dmA max. current: %dmA total energy: %dmWh power: %dmW\n",
-            ppp->tstamp, ppp->v_in, ppp->v_out, ppp->current, ppp->max_current, ppp->total_energy/3600, ppp->power);
+#endif
+
+    fprintf(stdout, "%s,%u,%d,%d,%d,%d,%d,%d\n", pp_dev->serial_number,
+            pp_pkt->tstamp, pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current,
+            pp_pkt->max_current, pp_pkt->total_energy/3600, pp_pkt->power);
+    /*printf("tstamp: %us v_in: %dmV v_out: %dmV current: %dmA max. current: %dmA total energy: %dmWh power: %dmW\n",
+            ppp->tstamp, ppp->v_in, ppp->v_out, ppp->current, ppp->max_current, ppp->total_energy/3600, ppp->power);*/
 
     libusb_submit_transfer(transfer);
 }
 
-static void portpilot_read_data(struct portpilot_ctx *ppc)
+static void portpilot_read_data(struct portpilot_dev *pp_dev)
 {
-    uint8_t *buf = calloc(ppc->max_packet_size, 1);
+    uint8_t *buf = calloc(pp_dev->max_packet_size, 1);
 
+    //TODO: Add proper error handling!
     if (!buf) {
         fprintf(stderr, "Could not allocate buffer memory\n");
         exit(EXIT_FAILURE);
     }
 
-    ppc->transfer = libusb_alloc_transfer(0);
-    libusb_fill_interrupt_transfer(ppc->transfer, ppc->dev_handle,
-            ppc->input_endpoint, buf, ppc->max_packet_size, portpilot_read_cb,
-            ppc, 5000);
+    pp_dev->transfer = libusb_alloc_transfer(0);
+    libusb_fill_interrupt_transfer(pp_dev->transfer, pp_dev->handle,
+            pp_dev->input_endpoint, buf, pp_dev->max_packet_size,
+            portpilot_read_cb, pp_dev, 5000);
 
-    libusb_submit_transfer(ppc->transfer);
+    libusb_submit_transfer(pp_dev->transfer);
 }
-#endif
 
 //Get the indexes of the HID interface
 static uint8_t portpilot_get_hid_idx(const struct libusb_config_descriptor *conf_desc,
@@ -181,11 +195,6 @@ static int portpilot_create_dev(libusb_device *device,
     pp_dev->max_packet_size = max_packet_size;
     pp_dev->input_endpoint = input_endpoint;
 
-    //This will actually be done earlier!
-    /*pp_dev->path[0] = libusb_get_port_number(device);
-    retval = libusb_get_port_numbers(device, pp_dev->path + 1, 7);
-    pp_dev->path_len = retval + 1;*/
-
     retval = libusb_open(device, &(pp_dev->handle));
 
     if (retval) {
@@ -240,7 +249,9 @@ static int portpilot_create_dev(libusb_device *device,
     //Ready to start reading
     fprintf(stdout, "Ready to start reading on device %s\n",
             pp_dev->serial_number);
-    
+
+    portpilot_read_data(pp_dev);
+
     return 0;
 }
 

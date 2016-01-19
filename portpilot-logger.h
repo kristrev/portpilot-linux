@@ -30,11 +30,6 @@ struct portpilot_ctx {
     struct backend_event_loop *event_loop;
     struct backend_epoll_handle *libusb_handle;
     struct portpilot_dev *dev;
-    //Per device information
-    struct libusb_device_handle *dev_handle;
-    int input_endpoint;
-    int max_packet_size;
-    struct libusb_transfer *transfer;
 };
 
 struct portpilot_pkt {
