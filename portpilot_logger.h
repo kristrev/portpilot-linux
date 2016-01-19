@@ -35,6 +35,7 @@ struct portpilot_dev {
     uint8_t input_endpoint;
     uint8_t path_len;
     uint8_t read_state;
+    uint8_t intf_num;
     uint8_t path[USB_MAX_PATH];
 };
 

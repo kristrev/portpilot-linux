@@ -78,6 +78,7 @@ uint8_t portpilot_helpers_create_dev(libusb_device *device,
 
     pp_dev->max_packet_size = max_packet_size;
     pp_dev->input_endpoint = input_endpoint;
+    pp_dev->intf_num = intf_num;
 
     retval = libusb_open(device, &(pp_dev->handle));
 

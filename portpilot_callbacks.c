@@ -66,10 +66,14 @@ static void portpilot_cb_handle_event_left(libusb_device *device,
     fprintf(stderr, "Will remove device with serial number %s\n",
             pp_ctx->dev->serial_number);
 
-    //TODO: Will be replaced with a list delete
+    pp_ctx->dev = NULL;
+
+    if (pp_dev->transfer)
+        libusb_free_transfer(pp_dev->transfer);
+
+    libusb_release_interface(pp_dev->handle, pp_dev->intf_num);
     libusb_close(pp_dev->handle);
     free(pp_dev);
-    pp_ctx->dev = NULL;
 }
 
 static void portpilot_cb_handle_event_added(libusb_device *device,
@@ -167,8 +171,11 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
         fprintf(stderr, "Previous transfer failed/timed out, retransmit\n");
         libusb_submit_transfer(transfer);
         return;
+    case LIBUSB_TRANSFER_CANCELLED:
+        fprintf(stderr, "Transfer was cancelled, not doing anything\n");
+        return;
     default:
-        fprintf(stderr, "Critical error, what to do?\n");
+        fprintf(stderr, "Device stopped working, critical error\n");
         return;
     }
 
