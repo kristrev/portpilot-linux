@@ -51,6 +51,11 @@ void backend_configure_epoll_handle(struct backend_epoll_handle *handle,
 	handle->cb = cb;
 }
 
+void backend_event_loop_stop(struct backend_event_loop *del)
+{
+    del->stop = 1;
+}
+
 struct backend_epoll_handle* backend_create_epoll_handle(
         void *ptr, int fd, backend_epoll_cb cb, uint8_t libusb_fd){
     struct backend_epoll_handle *handle =
@@ -174,6 +179,9 @@ void backend_event_loop_run(struct backend_event_loop *del)
     struct backend_timeout_handle *timeout = NULL;
     
     while(1){
+        if (del->stop)
+            return;
+
         usb_handle = NULL;
         if (del->timeout_list.lh_first) {
             timeout = del->timeout_list.lh_first;

@@ -15,6 +15,7 @@
 
 struct backend_event_loop;
 struct backend_epoll_handle;
+struct backend_timeout_handle;
 struct libusb_device_handle;
 struct libusb_transfer;
 struct portpilot_ctx;
@@ -36,13 +37,16 @@ struct portpilot_dev {
     uint8_t path_len;
     uint8_t read_state;
     uint8_t intf_num;
+    uint32_t num_pkts;
     uint8_t path[USB_MAX_PATH];
 };
 
 struct portpilot_ctx {
     struct backend_event_loop *event_loop;
     struct backend_epoll_handle *libusb_handle;
+    struct backend_timeout_handle *itr_timeout_handle;
     struct portpilot_dev *dev;
+    uint32_t pkts_to_read;
     uint8_t num_itr_req;
 };
 

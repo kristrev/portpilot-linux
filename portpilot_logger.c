@@ -8,6 +8,7 @@
 
 #include "portpilot_logger.h"
 #include "portpilot_callbacks.h"
+#include "portpilot_helpers.h"
 #include "backend_event_loop.h"
 
 //In the main file
@@ -89,7 +90,14 @@ void portpilot_logger_stop_itr_cb(struct portpilot_ctx *pp_ctx)
         pp_ctx->event_loop->itr_cb = NULL;
 }
 
-int main(int argc, char *argv[])
+void usage()
+{
+    fprintf(stdout, "Supported parameters:\n");
+    fprintf(stdout, "\t-c: number of packes to print (default: infinite)\n");
+    fprintf(stdout, "\t-h: this menu\n");
+}
+
+static uint8_t portpilot_start(uint32_t num_pkts)
 {
     struct timeval tv;
     uint64_t cur_time;
@@ -102,6 +110,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Failed to allocate memory for context\n");
         exit(EXIT_FAILURE);
     }
+
+    ppc->pkts_to_read = num_pkts;
 
     //Global libusb initsialisation
     retval = libusb_init(NULL);
@@ -120,9 +130,10 @@ int main(int argc, char *argv[])
     gettimeofday(&tv, NULL);
     cur_time = (tv.tv_sec * 1e3) + (tv.tv_usec / 1e3);
 
-    //TODO: Fix this later to proerly consider libusb timeouts
-    if (!backend_event_loop_add_timeout(ppc->event_loop, cur_time + 1000,
-                portpilot_cb_itr_cb, ppc, 1000)) {
+    ppc->itr_timeout_handle = backend_event_loop_add_timeout(ppc->event_loop,
+            cur_time + 1000, portpilot_cb_itr_cb, ppc, 1000);
+        
+    if (!ppc->itr_timeout_handle) {
         fprintf(stderr, "Failed to add libusb timeout timer\n");
         exit(EXIT_FAILURE);
     }
@@ -130,8 +141,43 @@ int main(int argc, char *argv[])
     //ppc->event_loop->itr_cb = portpilot_itr_cb;
     backend_event_loop_run(ppc->event_loop);
 
+    if (ppc->event_loop->stop)
+        retval = 1;
+    else
+        retval = 0;
+
+    if (ppc->dev)
+        portpilot_helpers_free_dev(ppc->dev);
+
     //Graceful exit
     libusb_exit(NULL);
+    free(ppc->itr_timeout_handle);
+    free(ppc->libusb_handle);
+    free(ppc->event_loop);
+    free(ppc);
 
-    exit(EXIT_FAILURE);
+    return (uint8_t) retval;
+}
+
+int main(int argc, char *argv[])
+{
+    int32_t opt = 0;
+    uint32_t num_pkts = 0;
+
+    while ((opt = getopt(argc, argv, "c:h")) != -1) {
+        switch (opt) {
+        case 'c':
+            num_pkts = (uint32_t) atoi(optarg);
+            break;
+        case 'h':
+        default:
+            usage();
+            exit(EXIT_SUCCESS);
+        }
+    }
+
+    if (portpilot_start(num_pkts))
+        exit(EXIT_SUCCESS);
+    else
+        exit(EXIT_FAILURE);
 }

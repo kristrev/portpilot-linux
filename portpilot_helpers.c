@@ -201,3 +201,13 @@ void portpilot_helpers_start_reading_data(struct portpilot_dev *pp_dev)
 
     pp_dev->read_state = READ_STATE_RUNNING;
 }
+
+void portpilot_helpers_free_dev(struct portpilot_dev *pp_dev)
+{
+    if (pp_dev->transfer)
+        libusb_free_transfer(pp_dev->transfer);
+
+    libusb_release_interface(pp_dev->handle, pp_dev->intf_num);
+    libusb_close(pp_dev->handle);
+    free(pp_dev);
+}

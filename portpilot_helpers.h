@@ -18,4 +18,6 @@ uint8_t portpilot_helpers_create_dev(libusb_device *device,
         uint8_t dev_path_len);
 void portpilot_helpers_start_reading_data(struct portpilot_dev *pp_dev);
 
+//Free memory allocate to one device
+void portpilot_helpers_free_dev(struct portpilot_dev *pp_dev);
 #endif

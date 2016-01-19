@@ -9,6 +9,7 @@
 #include "portpilot_logger.h"
 #include "backend_event_loop.h"
 #include "portpilot_helpers.h"
+#include "backend_event_loop.h"
 
 void portpilot_cb_libusb_fd_add(int fd, short events, void *data)
 {
@@ -68,18 +69,12 @@ static void portpilot_cb_handle_event_left(libusb_device *device,
 
     pp_ctx->dev = NULL;
 
-    if (pp_dev->transfer)
-        libusb_free_transfer(pp_dev->transfer);
-
-    libusb_release_interface(pp_dev->handle, pp_dev->intf_num);
-    libusb_close(pp_dev->handle);
-    free(pp_dev);
+    portpilot_helpers_free_dev(pp_dev);
 }
 
 static void portpilot_cb_handle_event_added(libusb_device *device,
         struct portpilot_ctx *pp_ctx, uint8_t *dev_path, uint8_t dev_path_len)
 {
-
     uint8_t conf_desc_idx, input_endpoint, intf_num;
     uint16_t max_packet_size;
     int32_t retval = 0, intf_desc_idx;
@@ -175,7 +170,8 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
         fprintf(stderr, "Transfer was cancelled, not doing anything\n");
         return;
     default:
-        fprintf(stderr, "Device stopped working, critical error\n");
+        //So far I have only seen this on disconnect, fail silently and then we
+        //clean up later
         return;
     }
 
@@ -196,6 +192,14 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
             pp_pkt->tstamp, pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current,
             pp_pkt->max_current, pp_pkt->total_energy/3600, pp_pkt->power);
 
+    ++pp_dev->num_pkts;
+
+    //Artificial limit for now
+    if (pp_dev->pp_ctx->pkts_to_read &&
+            pp_dev->num_pkts == pp_dev->pp_ctx->pkts_to_read) {
+        backend_event_loop_stop(pp_dev->pp_ctx->event_loop);
+        return;
+    }
+
     libusb_submit_transfer(transfer);
 }
-

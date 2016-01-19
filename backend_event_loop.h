@@ -56,6 +56,7 @@ struct backend_event_loop{
     LIST_HEAD(timeout, backend_timeout_handle) timeout_list;
     backend_itr_cb itr_cb;
     void *itr_data;
+    uint8_t stop;
 };
 
 //Create an backend_event_loop struct
@@ -67,6 +68,9 @@ struct backend_event_loop* backend_event_loop_create();
 //Update file descriptor + ptr to efd in events according to op
 int32_t backend_event_loop_update(struct backend_event_loop *del, uint32_t events,
         int32_t op, int32_t fd, void *ptr);
+
+//Stop the event loop
+void backend_event_loop_stop(struct backend_event_loop *del);
 
 //Add a timeout which is controlled by main loop
 struct backend_timeout_handle* backend_event_loop_add_timeout(
