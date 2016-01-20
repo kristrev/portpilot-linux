@@ -21,6 +21,15 @@ void portpilot_helpers_start_reading_data(struct portpilot_dev *pp_dev);
 //Free memory allocate to one device
 void portpilot_helpers_free_dev(struct portpilot_dev *pp_dev);
 
+//Extract serial number from usb device (if present) and compare with desired
+//serial. Return SUCCESS/FAILURE
 uint8_t portpilot_helpers_cmp_serial(const char *desired_serial,
         libusb_device *device);
+
+//Check if a device with the matching pat/path_len exists in device list,
+//returns or NULL
+struct portpilot_dev* portpilot_helpers_find_dev(
+        const struct portpilot_ctx *pp_ctx, const uint8_t *dev_path,
+        uint8_t dev_path_len);
+
 #endif

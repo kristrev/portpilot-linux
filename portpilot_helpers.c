@@ -95,6 +95,17 @@ uint8_t portpilot_helpers_get_input_info(const struct libusb_interface_descripto
     return RETVAL_FAILURE;
 }
 
+void portpilot_helpers_free_dev(struct portpilot_dev *pp_dev)
+{
+    if (pp_dev->transfer)
+        libusb_free_transfer(pp_dev->transfer);
+
+    libusb_release_interface(pp_dev->handle, pp_dev->intf_num);
+    libusb_close(pp_dev->handle);
+    LIST_REMOVE(pp_dev, next_dev);
+    free(pp_dev);
+}
+
 uint8_t portpilot_helpers_create_dev(libusb_device *device,
         struct portpilot_ctx *pp_ctx, uint16_t max_packet_size,
         uint8_t input_endpoint, uint8_t intf_num, uint8_t *dev_path,
@@ -157,8 +168,8 @@ uint8_t portpilot_helpers_create_dev(libusb_device *device,
     pp_dev->path_len = dev_path_len;
 
     //Will be a list insert
-    pp_ctx->dev = pp_dev;
     pp_dev->pp_ctx = pp_ctx;
+    LIST_INSERT_HEAD(&(pp_dev->pp_ctx->dev_head), pp_dev, next_dev);
 
     //Ready to start reading
     fprintf(stdout, "Ready to start reading on device %s\n",
@@ -230,17 +241,6 @@ void portpilot_helpers_start_reading_data(struct portpilot_dev *pp_dev)
     pp_dev->read_state = READ_STATE_RUNNING;
 }
 
-void portpilot_helpers_free_dev(struct portpilot_dev *pp_dev)
-{
-    if (pp_dev->transfer)
-        libusb_free_transfer(pp_dev->transfer);
-
-    libusb_release_interface(pp_dev->handle, pp_dev->intf_num);
-    libusb_close(pp_dev->handle);
-    free(pp_dev);
-}
-
-
 uint8_t portpilot_helpers_cmp_serial(const char *desired_serial,
         libusb_device *device)
 {
@@ -259,3 +259,19 @@ uint8_t portpilot_helpers_cmp_serial(const char *desired_serial,
         return RETVAL_FAILURE;
 }
 
+struct portpilot_dev* portpilot_helpers_find_dev(
+        const struct portpilot_ctx *pp_ctx, const uint8_t *dev_path,
+        uint8_t dev_path_len)
+{
+    struct portpilot_dev *ppd_itr = pp_ctx->dev_head.lh_first;
+
+    while (ppd_itr != NULL) {
+        if (ppd_itr->path_len == dev_path_len &&
+            !memcmp(ppd_itr->path, dev_path, dev_path_len))
+            return ppd_itr;
+
+        ppd_itr = ppd_itr->next_dev.le_next;
+    }
+
+    return NULL;
+}

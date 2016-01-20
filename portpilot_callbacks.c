@@ -48,26 +48,14 @@ void portpilot_cb_event_cb(void *ptr, int32_t fd, uint32_t events)
     libusb_handle_events_timeout_completed(NULL, &tv, NULL);
 }
 
-static void portpilot_cb_handle_event_left(libusb_device *device,
-        struct portpilot_ctx *pp_ctx, uint8_t *path, uint8_t path_len)
+static void portpilot_cb_handle_event_left(struct portpilot_ctx *pp_ctx,
+        struct portpilot_dev *pp_dev)
 {
-    struct portpilot_dev *pp_dev;
-
-    if (!pp_ctx->dev)
-        return;
-
-    pp_dev = pp_ctx->dev;
-
-    if (pp_dev->path_len != path_len)
-        return;
-
-    if (memcmp(pp_dev->path, path, path_len))
-        return;
-
-    fprintf(stderr, "Will remove device with serial number %s\n",
-            pp_ctx->dev->serial_number);
-
-    pp_ctx->dev = NULL;
+    if (pp_dev->serial_number)
+        fprintf(stderr, "Will remove device with serial number %s\n",
+                pp_dev->serial_number);
+    else
+        fprintf(stderr, "Will remove device\n");
 
     portpilot_helpers_free_dev(pp_dev);
 }
@@ -82,18 +70,16 @@ static void portpilot_cb_handle_event_added(libusb_device *device,
     struct libusb_config_descriptor *conf_desc = NULL;
     const struct libusb_interface_descriptor *intf_desc;
 
-    if (pp_ctx->dev)
-        return;
-
-    libusb_get_device_descriptor(device, &desc);
-
-    //Without a serial number, we can't identify device (should not happen for
-    //portpilot)
-    if (!desc.iSerialNumber) {
-        fprintf(stderr, "Device serial number missing\n");
+    //If no desired serial number is provided, user has indicated he or she is
+    //interested in all portpilots connected. So no need to check for serial
+    //etc.
+    if (pp_ctx->desired_serial &&
+            !portpilot_helpers_cmp_serial(pp_ctx->desired_serial, device)) {
+        fprintf(stderr, "Serial number mismatch\n");
         return;
     }
 
+    libusb_get_device_descriptor(device, &desc);
     libusb_get_active_config_descriptor(device, &conf_desc);
 
     if (!conf_desc) {
@@ -133,26 +119,34 @@ int portpilot_cb_libusb_cb(libusb_context *ctx, libusb_device *device,
                           libusb_hotplug_event event, void *user_data)
 {
     struct portpilot_ctx *pp_ctx = user_data;
+    struct portpilot_dev *pp_dev = NULL;
     int32_t retval;
     uint8_t dev_path[USB_MAX_PATH];
     uint8_t dev_path_len;
-
-    if (pp_ctx->desired_serial &&
-            !portpilot_helpers_cmp_serial(pp_ctx->desired_serial, device)) {
-        fprintf(stderr, "Serial number mismatch\n");
-        return 0;
-    }
 
     //Path is used both on add and remove, so read it already here
     dev_path[0] = libusb_get_port_number(device);
     retval = libusb_get_port_numbers(device, dev_path + 1, 7);
     dev_path_len = retval + 1;
 
-    //Decide how to handle this later
+    pp_dev = portpilot_helpers_find_dev(pp_ctx, dev_path, dev_path_len);
+
+    if ((event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT && !pp_dev) ||
+        (event == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED && pp_dev)) {
+        fprintf(stderr, "Incorrect state\n");
+        return 0;
+    }
+
     if (event == LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT)
-        portpilot_cb_handle_event_left(device, pp_ctx, dev_path, dev_path_len);
+        portpilot_cb_handle_event_left(pp_ctx, pp_dev);
     else
         portpilot_cb_handle_event_added(device, pp_ctx, dev_path, dev_path_len);
+
+#if 0
+
+
+    fprintf(stderr, "Read to act\n");
+#endif
 
     return 0;
 }

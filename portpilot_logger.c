@@ -110,6 +110,8 @@ static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number,
     ppc->csv_output = csv_output;
     ppc->output_file = output_file;
 
+    LIST_INIT(&ppc->dev_head);
+
     //Global libusb initsialisation
     retval = libusb_init(NULL);
 

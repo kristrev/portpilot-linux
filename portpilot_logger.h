@@ -16,6 +16,7 @@
                         "Total energy (mWh)"
 
 #include <stdint.h>
+#include <sys/queue.h>
 
 struct backend_event_loop;
 struct backend_epoll_handle;
@@ -35,6 +36,7 @@ struct portpilot_dev {
     struct libusb_device_handle *handle;
     struct libusb_transfer *transfer;
     struct uint8_t *read_buf;
+    LIST_ENTRY(portpilot_dev) next_dev;
     uint8_t serial_number[MAX_USB_STR_LEN+1];
     uint16_t max_packet_size;
     uint8_t input_endpoint;
@@ -49,6 +51,7 @@ struct portpilot_ctx {
     struct backend_event_loop *event_loop;
     struct backend_epoll_handle *libusb_handle;
     struct backend_timeout_handle *itr_timeout_handle;
+    LIST_HEAD(dev_list, portpilot_dev) dev_head;
     struct portpilot_dev *dev;
     const char *desired_serial;
     FILE *output_file;
