@@ -162,8 +162,9 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
 {
     const uint8_t *serial_number = (const uint8_t*) "";
     struct portpilot_dev *pp_dev = transfer->user_data;
+    struct portpilot_ctx *pp_ctx = pp_dev->pp_ctx;
     struct portpilot_pkt *pp_pkt = (struct portpilot_pkt*) transfer->buffer;
-    //uint8_t i;
+    uint8_t i;
 
     switch (transfer->status) {
     case LIBUSB_TRANSFER_COMPLETED:
@@ -182,34 +183,40 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
         return;
     }
 
+    //I sometimes see replies that are 0 length, ignore those and just
+    //re-submit transfer
     if (!transfer->actual_length) {
         libusb_submit_transfer(transfer);
         return;
     }
 
-#if 0
-    printf("RAW: ");
-    for (i = 0; i < transfer->actual_length; i++)
-        printf("%x:", transfer->buffer[i]);
-    printf("\n");
-#endif
+    if (pp_ctx->verbose) {
+        for (i = 0; i < transfer->actual_length - 1; i++)
+            fprintf(stdout, "%x:", transfer->buffer[i]);
+        fprintf(stdout, "%x\n", transfer->buffer[i]);
+    }
 
     if (pp_dev->serial_number)
         serial_number = pp_dev->serial_number;
 
     //Add to writer
-    fprintf(stdout, "%s,%u,%d,%d,%d,%d,%d,%d\n", serial_number,
+    if (pp_ctx->csv_output) 
+        fprintf(stdout, "%s,%u,%d,%d,%d,%d,%d,%d\n", serial_number,
             pp_pkt->tstamp, pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current,
             pp_pkt->max_current, pp_pkt->total_energy/3600, pp_pkt->power);
+    else
+        fprintf(stdout, "Serial %s, tstamp %usec, v_in %dmV, v_out%d mV"
+            ", current %dmA, max. current %dmA, total power %dmWh,"
+            "power %dmW\n", serial_number, pp_pkt->tstamp, pp_pkt->v_in,
+            pp_pkt->v_out, pp_pkt->current, pp_pkt->max_current,
+            pp_pkt->total_energy/3600, pp_pkt->power);
 
     ++pp_dev->num_pkts;
 
     //Artificial limit for now
     if (pp_dev->pp_ctx->pkts_to_read &&
-            pp_dev->num_pkts == pp_dev->pp_ctx->pkts_to_read) {
+            pp_dev->num_pkts == pp_dev->pp_ctx->pkts_to_read)
         backend_event_loop_stop(pp_dev->pp_ctx->event_loop);
-        return;
-    }
-
-    libusb_submit_transfer(transfer);
+    else
+        libusb_submit_transfer(transfer);
 }

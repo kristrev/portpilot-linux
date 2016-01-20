@@ -89,7 +89,8 @@ static uint8_t portpilot_configure(struct portpilot_ctx *ppc)
     return RETVAL_SUCCESS;
 }
 
-static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number)
+static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number,
+        uint8_t verbose, uint8_t csv_output)
 {
     struct timeval tv;
     uint64_t cur_time;
@@ -105,6 +106,8 @@ static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number)
 
     ppc->pkts_to_read = num_pkts;
     ppc->desired_serial = serial_number;
+    ppc->verbose = verbose;
+    ppc->csv_output = csv_output;
 
     //Global libusb initsialisation
     retval = libusb_init(NULL);
@@ -156,7 +159,10 @@ static void usage()
 {
     fprintf(stdout, "Supported parameters:\n");
     fprintf(stdout, "\t-r: number of packes to print (default: infinite)\n");
-    fprintf(stdout, "\t-d: serial number of device to poll (default: poll all/first device\n)");
+    fprintf(stdout, "\t-d: serial number of device to poll (default: poll "
+            "all/first device\n)");
+    fprintf(stdout, "\t-v: verbose (print raw USB message)\n");
+    fprintf(stdout, "\t-c: print csv to console (no units appended\n");
     fprintf(stdout, "\t-h: this menu\n");
 }
 
@@ -165,14 +171,21 @@ int main(int argc, char *argv[])
     int32_t opt = 0;
     uint32_t num_pkts = 0;
     const char *serial_number = NULL;
+    uint8_t verbose = 0, csv_output = 0;
 
-    while ((opt = getopt(argc, argv, "r:d:h")) != -1) {
+    while ((opt = getopt(argc, argv, "r:d:cvh")) != -1) {
         switch (opt) {
         case 'r':
             num_pkts = (uint32_t) atoi(optarg);
             break;
         case 'd':
             serial_number = optarg;
+            break;
+        case 'c':
+            csv_output = 1;
+            break;
+        case 'v':
+            verbose = 1;
             break;
         case 'h':
         default:
@@ -181,7 +194,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (portpilot_start(num_pkts, serial_number))
+    if (portpilot_start(num_pkts, serial_number, verbose, csv_output))
         exit(EXIT_SUCCESS);
     else
         exit(EXIT_FAILURE);

@@ -49,6 +49,8 @@ struct portpilot_ctx {
     const char *desired_serial;
     uint32_t pkts_to_read;
     uint8_t num_itr_req;
+    uint8_t verbose;
+    uint8_t csv_output;
 };
 
 struct portpilot_pkt {
