@@ -11,6 +11,10 @@
 
 #define USB_MAX_PATH 8 //(bus + port numbers (max. 7))
 
+#define CSV_DESCRIPTION "Dev. serial, VBus in (mV), VBus out (mV), " \
+                        "Current (mA), Max current (mA), Energy (mW), " \
+                        "Total energy (mWh)"
+
 #include <stdint.h>
 
 struct backend_event_loop;
@@ -47,6 +51,7 @@ struct portpilot_ctx {
     struct backend_timeout_handle *itr_timeout_handle;
     struct portpilot_dev *dev;
     const char *desired_serial;
+    FILE *output_file;
     uint32_t pkts_to_read;
     uint8_t num_itr_req;
     uint8_t verbose;

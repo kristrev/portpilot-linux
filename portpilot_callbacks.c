@@ -203,13 +203,20 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
     if (pp_ctx->csv_output) 
         fprintf(stdout, "%s,%u,%d,%d,%d,%d,%d,%d\n", serial_number,
             pp_pkt->tstamp, pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current,
-            pp_pkt->max_current, pp_pkt->total_energy/3600, pp_pkt->power);
+            pp_pkt->max_current, pp_pkt->power, pp_pkt->total_energy/3600);
     else
-        fprintf(stdout, "Serial %s, tstamp %usec, v_in %dmV, v_out%d mV"
-            ", current %dmA, max. current %dmA, total power %dmWh,"
-            "power %dmW\n", serial_number, pp_pkt->tstamp, pp_pkt->v_in,
-            pp_pkt->v_out, pp_pkt->current, pp_pkt->max_current,
-            pp_pkt->total_energy/3600, pp_pkt->power);
+        fprintf(stdout, "Serial %s, tstamp %usec, v_in %dmV, v_out %d mV"
+            ", current %dmA, max. current %dmA, energy %dmW"
+            ", total energy %dmWh\n", serial_number, pp_pkt->tstamp,
+            pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current, pp_pkt->max_current,
+            pp_pkt->power, pp_pkt->total_energy/3600);
+
+    //TODO: Consider how to handle errors when writing to file
+    if (pp_ctx->output_file)
+        fprintf(pp_ctx->output_file, "%s,%u,%d,%d,%d,%d,%d,%d\n", serial_number,
+            pp_pkt->tstamp, pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current,
+            pp_pkt->max_current, pp_pkt->power, pp_pkt->total_energy/3600);
+
 
     ++pp_dev->num_pkts;
 

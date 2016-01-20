@@ -90,7 +90,7 @@ static uint8_t portpilot_configure(struct portpilot_ctx *ppc)
 }
 
 static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number,
-        uint8_t verbose, uint8_t csv_output)
+        uint8_t verbose, uint8_t csv_output, FILE *output_file)
 {
     struct timeval tv;
     uint64_t cur_time;
@@ -108,6 +108,7 @@ static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number,
     ppc->desired_serial = serial_number;
     ppc->verbose = verbose;
     ppc->csv_output = csv_output;
+    ppc->output_file = output_file;
 
     //Global libusb initsialisation
     retval = libusb_init(NULL);
@@ -138,9 +139,9 @@ static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number,
     backend_event_loop_run(ppc->event_loop);
 
     if (ppc->event_loop->stop)
-        retval = 1;
+        retval = RETVAL_SUCCESS;
     else
-        retval = 0;
+        retval = RETVAL_FAILURE;
 
     if (ppc->dev)
         portpilot_helpers_free_dev(ppc->dev);
@@ -163,6 +164,7 @@ static void usage()
             "all/first device\n)");
     fprintf(stdout, "\t-v: verbose (print raw USB message)\n");
     fprintf(stdout, "\t-c: print csv to console (no units appended\n");
+    fprintf(stdout, "\t-f: write csv to file with specified filename\n");
     fprintf(stdout, "\t-h: this menu\n");
 }
 
@@ -170,16 +172,20 @@ int main(int argc, char *argv[])
 {
     int32_t opt = 0;
     uint32_t num_pkts = 0;
-    const char *serial_number = NULL;
+    const char *serial_number = NULL, *output_filename = NULL;
     uint8_t verbose = 0, csv_output = 0;
+    FILE *output_file = NULL;
 
-    while ((opt = getopt(argc, argv, "r:d:cvh")) != -1) {
+    while ((opt = getopt(argc, argv, "r:d:f:cvh")) != -1) {
         switch (opt) {
         case 'r':
             num_pkts = (uint32_t) atoi(optarg);
             break;
         case 'd':
             serial_number = optarg;
+            break;
+        case 'f':
+            output_filename = optarg;
             break;
         case 'c':
             csv_output = 1;
@@ -194,7 +200,28 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (portpilot_start(num_pkts, serial_number, verbose, csv_output))
+    if (output_filename) {
+        output_file = fopen(output_filename, "w");
+
+        if (!output_file) {
+            fprintf(stderr, "Failed to open desired output file\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    if (output_file && fprintf(output_file, CSV_DESCRIPTION) < 0) {
+        fprintf(stderr, "Could not write descriptive row to CSV\n");
+        fclose(output_file);
+        exit(EXIT_FAILURE);
+    }
+
+    opt = portpilot_start(num_pkts, serial_number, verbose, csv_output,
+            output_file);
+
+    if (output_file)
+        fclose(output_file);
+
+    if (opt)
         exit(EXIT_SUCCESS);
     else
         exit(EXIT_FAILURE);
