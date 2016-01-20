@@ -7,6 +7,43 @@
 #include "portpilot_logger.h"
 #include "portpilot_callbacks.h"
 
+static uint8_t portpilot_helpers_get_serial_num(libusb_device *device,
+        unsigned char *serial_buf, uint8_t serial_buf_len)
+{
+    struct libusb_device_descriptor desc = {0};
+    struct libusb_device_handle *handle;
+    int32_t retval;
+
+    libusb_get_device_descriptor(device, &desc);
+
+    //No device number to extract
+    if (!desc.iSerialNumber) {
+        fprintf(stderr, "Device serial number missing\n");
+        return RETVAL_FAILURE;
+    }
+
+    retval = libusb_open(device, &handle);
+
+    if (retval) {
+        fprintf(stderr, "Failed to open device: %s\n",
+                libusb_error_name(retval));
+        return RETVAL_FAILURE;
+    }
+
+    retval = libusb_get_string_descriptor_ascii(handle,
+            desc.iSerialNumber, serial_buf, serial_buf_len);
+
+    if (retval < 0) {
+        fprintf(stderr, "Failed to get serial number: %s\n",
+                libusb_error_name(retval));
+        libusb_close(handle);
+        return RETVAL_FAILURE;
+    }
+
+    libusb_close(handle);
+    return RETVAL_SUCCESS;
+}
+
 //Get the indexes of the HID interface
 uint8_t portpilot_helpers_get_hid_idx(const struct libusb_config_descriptor *conf_desc,
         uint8_t *conf_desc_idx, int32_t *intf_desc_idx)
@@ -65,7 +102,6 @@ uint8_t portpilot_helpers_create_dev(libusb_device *device,
 {
     int32_t retval;
     struct portpilot_dev *pp_dev = NULL;
-    struct libusb_device_descriptor desc = {0};
 
     //TODO: Split into new function?
     //All info is ready, time to create struc, open device and add to list
@@ -111,19 +147,11 @@ uint8_t portpilot_helpers_create_dev(libusb_device *device,
         return RETVAL_FAILURE;
     }
 
-    //Read and store serial number
-    //TODO: Do this earlier when we add support for listening to single device
-    libusb_get_device_descriptor(device, &desc);
-    retval = libusb_get_string_descriptor_ascii(pp_dev->handle,
-            desc.iSerialNumber, pp_dev->serial_number, MAX_USB_STR_LEN);
-
-    if (retval < 0) {
-        fprintf(stderr, "Failed to get serial number: %s\n",
-                libusb_error_name(retval));
-        libusb_close(pp_dev->handle);
-        free(pp_dev);
-        return RETVAL_FAILURE;
-    }
+    //Try to read serial number from device. It is not critical if it is not
+    //present, the check for matching a desired serial has been done by the time
+    //we get here
+    portpilot_helpers_get_serial_num(device, pp_dev->serial_number,
+            MAX_USB_STR_LEN);
 
     memcpy(pp_dev->path, dev_path, dev_path_len);
     pp_dev->path_len = dev_path_len;
@@ -211,3 +239,23 @@ void portpilot_helpers_free_dev(struct portpilot_dev *pp_dev)
     libusb_close(pp_dev->handle);
     free(pp_dev);
 }
+
+
+uint8_t portpilot_helpers_cmp_serial(const char *desired_serial,
+        libusb_device *device)
+{
+    size_t desired_serial_len = strlen(desired_serial);
+    uint8_t dev_serial_number[MAX_USB_STR_LEN + 1] = {0};
+
+    if (!portpilot_helpers_get_serial_num(device, dev_serial_number,
+                MAX_USB_STR_LEN))
+        return RETVAL_FAILURE;
+
+    if (strlen((const char*) dev_serial_number) == desired_serial_len &&
+        !strncmp((const char*) dev_serial_number, desired_serial,
+            desired_serial_len))
+        return RETVAL_SUCCESS;
+    else
+        return RETVAL_FAILURE;
+}
+

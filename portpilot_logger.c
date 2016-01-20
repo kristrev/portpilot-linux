@@ -11,7 +11,22 @@
 #include "portpilot_helpers.h"
 #include "backend_event_loop.h"
 
-//In the main file
+void portpilot_logger_start_itr_cb(struct portpilot_ctx *pp_ctx)
+{
+    if (!pp_ctx->num_itr_req)
+        pp_ctx->event_loop->itr_cb = portpilot_cb_itr_cb;
+
+    ++pp_ctx->num_itr_req;
+}
+
+void portpilot_logger_stop_itr_cb(struct portpilot_ctx *pp_ctx)
+{
+    --pp_ctx->num_itr_req;
+
+    if (!pp_ctx->num_itr_req)
+        pp_ctx->event_loop->itr_cb = NULL;
+}
+
 static uint8_t portpilot_configure(struct portpilot_ctx *ppc)
 {
     const struct libusb_pollfd **libusb_fds;
@@ -74,30 +89,7 @@ static uint8_t portpilot_configure(struct portpilot_ctx *ppc)
     return RETVAL_SUCCESS;
 }
 
-void portpilot_logger_start_itr_cb(struct portpilot_ctx *pp_ctx)
-{
-    if (!pp_ctx->num_itr_req)
-        pp_ctx->event_loop->itr_cb = portpilot_cb_itr_cb;
-
-    ++pp_ctx->num_itr_req;
-}
-
-void portpilot_logger_stop_itr_cb(struct portpilot_ctx *pp_ctx)
-{
-    --pp_ctx->num_itr_req;
-
-    if (!pp_ctx->num_itr_req)
-        pp_ctx->event_loop->itr_cb = NULL;
-}
-
-void usage()
-{
-    fprintf(stdout, "Supported parameters:\n");
-    fprintf(stdout, "\t-c: number of packes to print (default: infinite)\n");
-    fprintf(stdout, "\t-h: this menu\n");
-}
-
-static uint8_t portpilot_start(uint32_t num_pkts)
+static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number)
 {
     struct timeval tv;
     uint64_t cur_time;
@@ -112,6 +104,7 @@ static uint8_t portpilot_start(uint32_t num_pkts)
     }
 
     ppc->pkts_to_read = num_pkts;
+    ppc->desired_serial = serial_number;
 
     //Global libusb initsialisation
     retval = libusb_init(NULL);
@@ -159,15 +152,27 @@ static uint8_t portpilot_start(uint32_t num_pkts)
     return (uint8_t) retval;
 }
 
+static void usage()
+{
+    fprintf(stdout, "Supported parameters:\n");
+    fprintf(stdout, "\t-r: number of packes to print (default: infinite)\n");
+    fprintf(stdout, "\t-d: serial number of device to poll (default: poll all/first device\n)");
+    fprintf(stdout, "\t-h: this menu\n");
+}
+
 int main(int argc, char *argv[])
 {
     int32_t opt = 0;
     uint32_t num_pkts = 0;
+    const char *serial_number = NULL;
 
-    while ((opt = getopt(argc, argv, "c:h")) != -1) {
+    while ((opt = getopt(argc, argv, "r:d:h")) != -1) {
         switch (opt) {
-        case 'c':
+        case 'r':
             num_pkts = (uint32_t) atoi(optarg);
+            break;
+        case 'd':
+            serial_number = optarg;
             break;
         case 'h':
         default:
@@ -176,7 +181,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (portpilot_start(num_pkts))
+    if (portpilot_start(num_pkts, serial_number))
         exit(EXIT_SUCCESS);
     else
         exit(EXIT_FAILURE);

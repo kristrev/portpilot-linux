@@ -137,6 +137,12 @@ int portpilot_cb_libusb_cb(libusb_context *ctx, libusb_device *device,
     uint8_t dev_path[USB_MAX_PATH];
     uint8_t dev_path_len;
 
+    if (pp_ctx->desired_serial &&
+            !portpilot_helpers_cmp_serial(pp_ctx->desired_serial, device)) {
+        fprintf(stderr, "Serial number mismatch\n");
+        return 0;
+    }
+
     //Path is used both on add and remove, so read it already here
     dev_path[0] = libusb_get_port_number(device);
     retval = libusb_get_port_numbers(device, dev_path + 1, 7);
@@ -154,6 +160,7 @@ int portpilot_cb_libusb_cb(libusb_context *ctx, libusb_device *device,
 //USB callback
 void portpilot_cb_read_cb(struct libusb_transfer *transfer)
 {
+    const uint8_t *serial_number = (const uint8_t*) "";
     struct portpilot_dev *pp_dev = transfer->user_data;
     struct portpilot_pkt *pp_pkt = (struct portpilot_pkt*) transfer->buffer;
     //uint8_t i;
@@ -187,8 +194,11 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
     printf("\n");
 #endif
 
+    if (pp_dev->serial_number)
+        serial_number = pp_dev->serial_number;
+
     //Add to writer
-    fprintf(stdout, "%s,%u,%d,%d,%d,%d,%d,%d\n", pp_dev->serial_number,
+    fprintf(stdout, "%s,%u,%d,%d,%d,%d,%d,%d\n", serial_number,
             pp_pkt->tstamp, pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current,
             pp_pkt->max_current, pp_pkt->total_energy/3600, pp_pkt->power);
 

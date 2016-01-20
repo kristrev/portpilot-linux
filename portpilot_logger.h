@@ -46,6 +46,7 @@ struct portpilot_ctx {
     struct backend_epoll_handle *libusb_handle;
     struct backend_timeout_handle *itr_timeout_handle;
     struct portpilot_dev *dev;
+    const char *desired_serial;
     uint32_t pkts_to_read;
     uint8_t num_itr_req;
 };

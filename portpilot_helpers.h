@@ -20,4 +20,7 @@ void portpilot_helpers_start_reading_data(struct portpilot_dev *pp_dev);
 
 //Free memory allocate to one device
 void portpilot_helpers_free_dev(struct portpilot_dev *pp_dev);
+
+uint8_t portpilot_helpers_cmp_serial(const char *desired_serial,
+        libusb_device *device);
 #endif
