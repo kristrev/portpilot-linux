@@ -52,10 +52,11 @@ struct portpilot_ctx {
     struct backend_epoll_handle *libusb_handle;
     struct backend_timeout_handle *itr_timeout_handle;
     LIST_HEAD(dev_list, portpilot_dev) dev_head;
-    struct portpilot_dev *dev;
     const char *desired_serial;
     FILE *output_file;
     uint32_t pkts_to_read;
+    uint8_t num_done_read;
+    uint8_t dev_list_len;
     uint8_t num_itr_req;
     uint8_t verbose;
     uint8_t csv_output;

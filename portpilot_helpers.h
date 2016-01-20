@@ -32,4 +32,11 @@ struct portpilot_dev* portpilot_helpers_find_dev(
         const struct portpilot_ctx *pp_ctx, const uint8_t *dev_path,
         uint8_t dev_path_len);
 
+//Free all memory occupied by one context (including devie list)
+void portpilot_helpers_free_ctx(struct portpilot_ctx *pp_ctx);
+
+//Check if all devices are done with receiving the required number of packets
+//and stop loop if so
+void portpilot_helpers_stop_loop(struct portpilot_ctx *pp_ctx);
+
 #endif

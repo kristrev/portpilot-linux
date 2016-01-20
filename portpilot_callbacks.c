@@ -33,13 +33,26 @@ void portpilot_cb_itr_cb(void *ptr)
 {
     struct portpilot_ctx *pp_ctx = ptr;
     struct timeval tv = {0 ,0};
+    struct portpilot_dev *ppd_itr = pp_ctx->dev_head.lh_first;
 
     //Run libusb timers
     libusb_handle_events_timeout_completed(NULL, &tv, NULL);
 
-    //Check any device for flag set
-    if (pp_ctx->dev && pp_ctx->dev->read_state == READ_STATE_FAILED_START)
-        portpilot_helpers_start_reading_data(pp_ctx->dev);
+    //Safety in case more than one device was connected and one is disconnected
+    //after all the others have finished receiving packets
+    portpilot_helpers_stop_loop(pp_ctx);
+
+    if (!pp_ctx->num_itr_req)
+        return;
+
+    //Restart reading on devices that for some reason have failed
+    while (ppd_itr != NULL) {
+        if (ppd_itr->read_state == READ_STATE_FAILED_START)
+            portpilot_helpers_start_reading_data(ppd_itr);
+
+        ppd_itr = ppd_itr->next_dev.le_next;
+    }
+
 }
 
 void portpilot_cb_event_cb(void *ptr, int32_t fd, uint32_t events)
@@ -142,12 +155,6 @@ int portpilot_cb_libusb_cb(libusb_context *ctx, libusb_device *device,
     else
         portpilot_cb_handle_event_added(device, pp_ctx, dev_path, dev_path_len);
 
-#if 0
-
-
-    fprintf(stderr, "Read to act\n");
-#endif
-
     return 0;
 }
 
@@ -211,13 +218,15 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
             pp_pkt->tstamp, pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current,
             pp_pkt->max_current, pp_pkt->power, pp_pkt->total_energy/3600);
 
-
     ++pp_dev->num_pkts;
 
     //Artificial limit for now
     if (pp_dev->pp_ctx->pkts_to_read &&
-            pp_dev->num_pkts == pp_dev->pp_ctx->pkts_to_read)
-        backend_event_loop_stop(pp_dev->pp_ctx->event_loop);
-    else
-        libusb_submit_transfer(transfer);
+            pp_dev->num_pkts == pp_dev->pp_ctx->pkts_to_read) {
+        pp_dev->pp_ctx->num_done_read++;
+        portpilot_helpers_stop_loop(pp_dev->pp_ctx);
+        return;
+    }
+
+    libusb_submit_transfer(transfer);
 }

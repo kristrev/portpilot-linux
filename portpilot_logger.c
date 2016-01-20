@@ -145,15 +145,8 @@ static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number,
     else
         retval = RETVAL_FAILURE;
 
-    if (ppc->dev)
-        portpilot_helpers_free_dev(ppc->dev);
-
-    //Graceful exit
+    portpilot_helpers_free_ctx(ppc);
     libusb_exit(NULL);
-    free(ppc->itr_timeout_handle);
-    free(ppc->libusb_handle);
-    free(ppc->event_loop);
-    free(ppc);
 
     return (uint8_t) retval;
 }

@@ -6,6 +6,7 @@
 #include "portpilot_helpers.h"
 #include "portpilot_logger.h"
 #include "portpilot_callbacks.h"
+#include "backend_event_loop.h"
 
 static uint8_t portpilot_helpers_get_serial_num(libusb_device *device,
         unsigned char *serial_buf, uint8_t serial_buf_len)
@@ -97,11 +98,13 @@ uint8_t portpilot_helpers_get_input_info(const struct libusb_interface_descripto
 
 void portpilot_helpers_free_dev(struct portpilot_dev *pp_dev)
 {
+    libusb_release_interface(pp_dev->handle, pp_dev->intf_num);
+    libusb_close(pp_dev->handle);
+
     if (pp_dev->transfer)
         libusb_free_transfer(pp_dev->transfer);
 
-    libusb_release_interface(pp_dev->handle, pp_dev->intf_num);
-    libusb_close(pp_dev->handle);
+    --pp_dev->pp_ctx->dev_list_len;
     LIST_REMOVE(pp_dev, next_dev);
     free(pp_dev);
 }
@@ -170,6 +173,7 @@ uint8_t portpilot_helpers_create_dev(libusb_device *device,
     //Will be a list insert
     pp_dev->pp_ctx = pp_ctx;
     LIST_INSERT_HEAD(&(pp_dev->pp_ctx->dev_head), pp_dev, next_dev);
+    ++pp_ctx->dev_list_len;
 
     //Ready to start reading
     fprintf(stdout, "Ready to start reading on device %s\n",
@@ -274,4 +278,28 @@ struct portpilot_dev* portpilot_helpers_find_dev(
     }
 
     return NULL;
+}
+
+void portpilot_helpers_free_ctx(struct portpilot_ctx *pp_ctx)
+{
+    struct portpilot_dev *ppd_itr = pp_ctx->dev_head.lh_first, *ppd_tmp;
+
+    while (ppd_itr != NULL) {
+        ppd_tmp = ppd_itr;
+        ppd_itr = ppd_itr->next_dev.le_next;
+
+        portpilot_helpers_free_dev(ppd_tmp);
+    }
+
+    free(pp_ctx->itr_timeout_handle);
+    free(pp_ctx->libusb_handle);
+    free(pp_ctx->event_loop);
+    free(pp_ctx);
+
+}
+
+void portpilot_helpers_stop_loop(struct portpilot_ctx *pp_ctx)
+{
+    if (pp_ctx->num_done_read == pp_ctx->dev_list_len)
+        backend_event_loop_stop(pp_ctx->event_loop);
 }
