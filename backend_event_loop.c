@@ -1,17 +1,18 @@
 /*
- * Copyright 2015 Kristian Evensen <kristian.evensen@gmail.com>
+ * Copyright 2016 Kristian Evensen <kristian.evensen@gmail.com>
  *
- * This file is part of Usb Monitor. Usb Monitor is free software: you can
- * redistribute it and/or modify it under the terms of the Lesser GNU General
- * Public License as published by the Free Software Foundation, either version 3
- * of the License, or (at your option) any later version.
+ * This file is part of Portpilot Logger. Portpilot Logger is free software: you
+ * can redistribute it and/or modify it under the terms of the Lesser GNU
+ * General Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
- * Usb Montior is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ * Portpilot Logger is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+ * details.
  *
  * You should have received a copy of the GNU General Public License along with
- * Usb Monitor. If not, see http://www.gnu.org/licenses/.
+ * Portpilot Logger. If not, see http://www.gnu.org/licenses/.
  */
 
 #include <stdint.h>
@@ -20,9 +21,6 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
-
-//Remove
-#include <stdio.h>
 
 #include "backend_event_loop.h"
 
