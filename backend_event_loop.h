@@ -78,6 +78,14 @@ struct backend_timeout_handle* backend_event_loop_add_timeout(
         backend_timeout_cb timeout_cb, void *ptr,
         uint32_t intvl);
 
+//Remove timeout from timeout list
+void backend_event_loop_remove_timeout(struct backend_timeout_handle *timeout);
+
+//Insert an updated timeout in list. Note that it is not checked if timeout is
+//already a member of list
+void backend_event_loop_insert_timeout(struct backend_event_loop *del,
+                                   struct backend_timeout_handle *handle);
+
 //Fill handle with ptr, fd, and cb. Used by create_epoll_handle and can be used
 //by applications that use a different allocater for handle
 void backend_configure_epoll_handle(struct backend_epoll_handle *handle,

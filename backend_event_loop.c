@@ -91,7 +91,7 @@ static void backend_print_timeouts(struct backend_event_loop *del)
     printf("\n");
 }
 
-static void backend_insert_timeout(struct backend_event_loop *del,
+void backend_event_loop_insert_timeout(struct backend_event_loop *del,
                                    struct backend_timeout_handle *handle)
 {
     struct backend_timeout_handle *itr = del->timeout_list.lh_first, *prev_itr;
@@ -113,6 +113,13 @@ static void backend_insert_timeout(struct backend_event_loop *del,
     LIST_INSERT_AFTER(prev_itr, handle, timeout_next);
 }
 
+void backend_event_loop_remove_timeout(struct backend_timeout_handle *timeout)
+{
+    LIST_REMOVE(timeout, timeout_next);
+    timeout->timeout_next.le_next = NULL;
+    timeout->timeout_next.le_prev = NULL;
+}
+
 struct backend_timeout_handle* backend_event_loop_add_timeout(
         struct backend_event_loop *del, uint64_t timeout_clock,
         backend_timeout_cb timeout_cb, void *ptr, uint32_t intvl)
@@ -130,7 +137,7 @@ struct backend_timeout_handle* backend_event_loop_add_timeout(
     handle->data = ptr;
     handle->intvl = intvl;
 
-    backend_insert_timeout(del, handle);
+    backend_event_loop_insert_timeout(del, handle);
     return handle;
 }
 
@@ -158,9 +165,7 @@ static void backend_event_loop_run_timers(struct backend_event_loop *del)
             //Rearm timer or free memory if we are done
             if (cur_timeout->intvl) {
                 cur_timeout->timeout_clock = cur_time + cur_timeout->intvl;
-                backend_insert_timeout(del, cur_timeout);
-            } else {
-                free(cur_timeout);
+                backend_event_loop_insert_timeout(del, cur_timeout);
             }
         } else {
             break;
@@ -177,7 +182,9 @@ void backend_event_loop_run(struct backend_event_loop *del)
     struct timeval tv;
     uint64_t cur_time = 0;
     struct backend_timeout_handle *timeout = NULL;
-    
+   
+    del->stop = 0;
+
     while(1){
         if (del->stop)
             return;

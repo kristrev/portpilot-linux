@@ -101,8 +101,14 @@ void portpilot_helpers_free_dev(struct portpilot_dev *pp_dev)
     libusb_release_interface(pp_dev->handle, pp_dev->intf_num);
     libusb_close(pp_dev->handle);
 
+    //It seems that if a device is disconnected, transfer fails before device is
+    //removed, so we clean up memory correctly. In the context case, we make
+    //sure that transfer is not active before calling free_dev
     if (pp_dev->transfer)
         libusb_free_transfer(pp_dev->transfer);
+
+    if (pp_dev->agg_data)
+        free(pp_dev->agg_data);
 
     --pp_dev->pp_ctx->dev_list_len;
     LIST_REMOVE(pp_dev, next_dev);
@@ -124,6 +130,15 @@ uint8_t portpilot_helpers_create_dev(libusb_device *device,
     if (!pp_dev) {
         fprintf(stderr, "Failed to allocate memory for PortPilot device\n");
         return RETVAL_FAILURE;
+    }
+
+    if (pp_ctx->output_interval) {
+        pp_dev->agg_data = calloc(sizeof(struct portpilot_data), 1);
+
+        if (!pp_dev->agg_data) {
+            fprintf(stderr, "Failed to allocate memory for agg. data\n");
+            return RETVAL_FAILURE;
+        }
     }
 
     pp_dev->max_packet_size = max_packet_size;
@@ -280,26 +295,100 @@ struct portpilot_dev* portpilot_helpers_find_dev(
     return NULL;
 }
 
-void portpilot_helpers_free_ctx(struct portpilot_ctx *pp_ctx)
+uint8_t portpilot_helpers_free_ctx(struct portpilot_ctx *pp_ctx, uint8_t force)
 {
     struct portpilot_dev *ppd_itr = pp_ctx->dev_head.lh_first, *ppd_tmp;
+    uint8_t failed_cancels = 0;
 
     while (ppd_itr != NULL) {
         ppd_tmp = ppd_itr;
         ppd_itr = ppd_itr->next_dev.le_next;
 
-        portpilot_helpers_free_dev(ppd_tmp);
+        //We are only allowed to free memory if transfer is cancelled
+        if (force || (ppd_tmp->transfer &&
+                libusb_cancel_transfer(ppd_tmp->transfer) ==
+                LIBUSB_ERROR_NOT_FOUND)) {
+            portpilot_helpers_free_dev(ppd_tmp);
+        } else {
+            ++pp_ctx->num_cancel;
+            ++failed_cancels;
+        }
     }
+
+    if (failed_cancels)
+        return failed_cancels;
+
+    if (pp_ctx->output_timeout_handle)
+        free(pp_ctx->output_timeout_handle);
 
     free(pp_ctx->itr_timeout_handle);
     free(pp_ctx->libusb_handle);
     free(pp_ctx->event_loop);
     free(pp_ctx);
 
+    return failed_cancels;
 }
 
 void portpilot_helpers_stop_loop(struct portpilot_ctx *pp_ctx)
 {
-    if (pp_ctx->num_done_read == pp_ctx->dev_list_len)
+    if (pp_ctx->dev_list_len && pp_ctx->num_done_read == pp_ctx->dev_list_len)
         backend_event_loop_stop(pp_ctx->event_loop);
+}
+
+void portpilot_helpers_output_data(struct portpilot_dev *pp_dev,
+        struct portpilot_data *pp_data)
+{
+    struct portpilot_ctx *pp_ctx = pp_dev->pp_ctx;
+    const uint8_t *serial_number = pp_dev->serial_number ?
+        pp_dev->serial_number : (const uint8_t *) "";
+
+    //Add to writer
+    if (pp_ctx->csv_output) 
+        fprintf(stdout, "%s,%u,%u,%u,%u,%u,%u,%u\n",
+            serial_number,
+            pp_data->tstamp,
+            pp_data->v_in/pp_data->num_readings,
+            pp_data->v_out/pp_data->num_readings,
+            pp_data->current/pp_data->num_readings,
+            pp_data->max_current,
+            pp_data->energy/pp_data->num_readings,
+            pp_data->total_energy);
+    else
+        fprintf(stdout, "Serial %s, tstamp %usec, v_in %umV, v_out %u mV"
+            ", current %umA, max. current %umA, energy %umW"
+            ", total energy %umWh\n",
+            serial_number,
+            pp_data->tstamp,
+            pp_data->v_in/pp_data->num_readings,
+            pp_data->v_out/pp_data->num_readings,
+            pp_data->current/pp_data->num_readings,
+            pp_data->max_current,
+            pp_data->energy/pp_data->num_readings,
+            pp_data->total_energy);
+
+    //TODO: Consider how to handle errors when writing to file
+    if (pp_ctx->output_file)
+        fprintf(stdout, "%s,%u,%u,%u,%u,%u,%u,%u\n",
+            serial_number,
+            pp_data->tstamp,
+            pp_data->v_in/pp_data->num_readings,
+            pp_data->v_out/pp_data->num_readings,
+            pp_data->current/pp_data->num_readings,
+            pp_data->max_current,
+            pp_data->energy/pp_data->num_readings,
+            pp_data->total_energy);
+}
+
+uint8_t portpilot_helpers_inc_num_pkts(struct portpilot_dev *pp_dev)
+{
+    ++pp_dev->num_pkts;
+
+    if (pp_dev->pp_ctx->pkts_to_read &&
+            pp_dev->num_pkts == pp_dev->pp_ctx->pkts_to_read) {
+        pp_dev->pp_ctx->num_done_read++;
+        portpilot_helpers_stop_loop(pp_dev->pp_ctx);
+        return RETVAL_SUCCESS;
+    }
+
+    return RETVAL_FAILURE;
 }

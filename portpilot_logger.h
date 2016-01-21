@@ -25,6 +25,17 @@ struct libusb_device_handle;
 struct libusb_transfer;
 struct portpilot_ctx;
 
+struct portpilot_data {
+    uint32_t tstamp;
+    uint32_t v_in;
+    uint32_t v_out;
+    uint32_t energy;
+    uint32_t total_energy;
+    uint16_t current;
+    uint16_t max_current;
+    uint16_t num_readings;
+};
+
 enum {
     READ_STATE_OK = 0,
     READ_STATE_FAILED_START,
@@ -35,6 +46,7 @@ struct portpilot_dev {
     struct portpilot_ctx *pp_ctx;
     struct libusb_device_handle *handle;
     struct libusb_transfer *transfer;
+    struct portpilot_data *agg_data;
     struct uint8_t *read_buf;
     LIST_ENTRY(portpilot_dev) next_dev;
     uint8_t serial_number[MAX_USB_STR_LEN+1];
@@ -51,15 +63,19 @@ struct portpilot_ctx {
     struct backend_event_loop *event_loop;
     struct backend_epoll_handle *libusb_handle;
     struct backend_timeout_handle *itr_timeout_handle;
+    struct backend_timeout_handle *output_timeout_handle;
     LIST_HEAD(dev_list, portpilot_dev) dev_head;
     const char *desired_serial;
     FILE *output_file;
     uint32_t pkts_to_read;
+    uint8_t output_interval;
     uint8_t num_done_read;
     uint8_t dev_list_len;
     uint8_t num_itr_req;
     uint8_t verbose;
     uint8_t csv_output;
+    uint8_t num_cancel;
+    uint8_t num_cancelled;
 };
 
 struct portpilot_pkt {
@@ -79,7 +95,7 @@ struct portpilot_pkt {
     uint16_t __pad2;
     uint16_t __pad3;
     //mW
-    int16_t power;
+    int16_t energy;
 }__attribute((packed))__;
 
 //Functions for updating the reference counter and starting/stopping the

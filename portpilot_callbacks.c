@@ -55,6 +55,28 @@ void portpilot_cb_itr_cb(void *ptr)
 
 }
 
+void portpilot_cb_output_cb(void *ptr)
+{
+    struct portpilot_ctx *pp_ctx = ptr;
+    struct portpilot_dev *ppd_itr = pp_ctx->dev_head.lh_first;
+
+    while (ppd_itr != NULL) {
+        if (ppd_itr->agg_data->num_readings) {
+            portpilot_helpers_output_data(ppd_itr, ppd_itr->agg_data);
+            memset(ppd_itr->agg_data, 0, sizeof(struct portpilot_data));
+            portpilot_helpers_inc_num_pkts(ppd_itr);
+        }
+
+        ppd_itr = ppd_itr->next_dev.le_next;
+    }
+}
+
+void portpilot_cb_cancel_cb(void *ptr)
+{
+    struct portpilot_ctx *pp_ctx = ptr;
+    backend_event_loop_stop(pp_ctx->event_loop);
+}
+
 void portpilot_cb_event_cb(void *ptr, int32_t fd, uint32_t events)
 {
     struct timeval tv = {0 ,0};
@@ -161,10 +183,12 @@ int portpilot_cb_libusb_cb(libusb_context *ctx, libusb_device *device,
 //USB callback
 void portpilot_cb_read_cb(struct libusb_transfer *transfer)
 {
-    const uint8_t *serial_number = (const uint8_t*) "";
     struct portpilot_dev *pp_dev = transfer->user_data;
     struct portpilot_ctx *pp_ctx = pp_dev->pp_ctx;
     struct portpilot_pkt *pp_pkt = (struct portpilot_pkt*) transfer->buffer;
+    struct portpilot_data pp_data = {0};
+    struct portpilot_data *data_ptr = pp_dev->agg_data ?
+        pp_dev->agg_data : &pp_data;
     uint8_t i;
 
     switch (transfer->status) {
@@ -176,7 +200,8 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
         libusb_submit_transfer(transfer);
         return;
     case LIBUSB_TRANSFER_CANCELLED:
-        fprintf(stderr, "Transfer was cancelled, not doing anything\n");
+        if (++pp_ctx->num_cancelled == pp_ctx->num_cancel)
+            backend_event_loop_stop(pp_ctx->event_loop);
         return;
     default:
         //So far I have only seen this on disconnect, fail silently and then we
@@ -196,37 +221,33 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
             fprintf(stdout, "%x:", transfer->buffer[i]);
         fprintf(stdout, "%x\n", transfer->buffer[i]);
     }
+   
+    //Fill structure
+    data_ptr->tstamp = pp_pkt->tstamp;
+    data_ptr->v_in += pp_pkt->v_in >= 0 ? pp_pkt->v_in :
+        (pp_pkt->v_in * -1);
+    data_ptr->v_out += pp_pkt->v_out >= 0 ? pp_pkt->v_out :
+        (pp_pkt->v_out * -1);
+    data_ptr->current += pp_pkt->current >= 0 ? pp_pkt->current :
+        (pp_pkt->current * -1);
+    data_ptr->max_current = pp_pkt->max_current >= 0 ? pp_pkt->max_current :
+        (pp_pkt->max_current * -1);
+    data_ptr->energy += pp_pkt->energy >= 0 ? pp_pkt->energy :
+        (pp_pkt->energy * -1);
+    data_ptr->total_energy = pp_pkt->total_energy >= 0 ?
+        pp_pkt->total_energy / 3600 :
+        (pp_pkt->total_energy * -1) / 3600;
+    data_ptr->num_readings++;
 
-    if (pp_dev->serial_number)
-        serial_number = pp_dev->serial_number;
-
-    //Add to writer
-    if (pp_ctx->csv_output) 
-        fprintf(stdout, "%s,%u,%d,%d,%d,%d,%d,%d\n", serial_number,
-            pp_pkt->tstamp, pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current,
-            pp_pkt->max_current, pp_pkt->power, pp_pkt->total_energy/3600);
-    else
-        fprintf(stdout, "Serial %s, tstamp %usec, v_in %dmV, v_out %d mV"
-            ", current %dmA, max. current %dmA, energy %dmW"
-            ", total energy %dmWh\n", serial_number, pp_pkt->tstamp,
-            pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current, pp_pkt->max_current,
-            pp_pkt->power, pp_pkt->total_energy/3600);
-
-    //TODO: Consider how to handle errors when writing to file
-    if (pp_ctx->output_file)
-        fprintf(pp_ctx->output_file, "%s,%u,%d,%d,%d,%d,%d,%d\n", serial_number,
-            pp_pkt->tstamp, pp_pkt->v_in, pp_pkt->v_out, pp_pkt->current,
-            pp_pkt->max_current, pp_pkt->power, pp_pkt->total_energy/3600);
-
-    ++pp_dev->num_pkts;
-
-    //Artificial limit for now
-    if (pp_dev->pp_ctx->pkts_to_read &&
-            pp_dev->num_pkts == pp_dev->pp_ctx->pkts_to_read) {
-        pp_dev->pp_ctx->num_done_read++;
-        portpilot_helpers_stop_loop(pp_dev->pp_ctx);
+    //If we output aggregated data, then the timeout callback is responsible for
+    //the output, stopping the loop etc.
+    if (pp_dev->agg_data) {
+        libusb_submit_transfer(transfer);
         return;
     }
 
-    libusb_submit_transfer(transfer);
+    portpilot_helpers_output_data(pp_dev, data_ptr);
+
+    if (!portpilot_helpers_inc_num_pkts(pp_dev))
+        libusb_submit_transfer(transfer);
 }

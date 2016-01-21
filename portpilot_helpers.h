@@ -7,6 +7,7 @@ struct libusb_config_descriptor;
 struct libusb_interface_descriptor;
 struct portpilot_ctx;
 struct portpilot_dev;
+struct portpilot_data;
 
 uint8_t portpilot_helpers_get_hid_idx(const struct libusb_config_descriptor *conf_desc,
         uint8_t *conf_desc_idx, int32_t *intf_desc_idx);
@@ -33,10 +34,17 @@ struct portpilot_dev* portpilot_helpers_find_dev(
         uint8_t dev_path_len);
 
 //Free all memory occupied by one context (including devie list)
-void portpilot_helpers_free_ctx(struct portpilot_ctx *pp_ctx);
+uint8_t portpilot_helpers_free_ctx(struct portpilot_ctx *pp_ctx, uint8_t force);
 
 //Check if all devices are done with receiving the required number of packets
 //and stop loop if so
 void portpilot_helpers_stop_loop(struct portpilot_ctx *pp_ctx);
 
+//output the data store in pp_data, according to rules specified in the context
+//that pp_dev belongs to
+void portpilot_helpers_output_data(struct portpilot_dev *pp_dev,
+        struct portpilot_data *pp_data);
+
+//increase number of packets received counter and potentially stop event loop
+uint8_t portpilot_helpers_inc_num_pkts(struct portpilot_dev *pp_dev);
 #endif
