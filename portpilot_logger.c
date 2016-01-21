@@ -177,6 +177,8 @@ static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number,
     gettimeofday(&tv, NULL);
     cur_time = (tv.tv_sec * 1e3) + (tv.tv_usec / 1e3);
 
+    //Recycle timeout handle, no need to create another handle as they are all
+    //active
     ppc->itr_timeout_handle->cb = portpilot_cb_cancel_cb;
     ppc->itr_timeout_handle->timeout_clock = cur_time + 500;
     ppc->itr_timeout_handle->intvl = 0;

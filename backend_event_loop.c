@@ -80,17 +80,6 @@ int32_t backend_event_loop_update(struct backend_event_loop *del, uint32_t event
     return epoll_ctl(del->efd, op, fd, &ev);
 } 
 
-static void backend_print_timeouts(struct backend_event_loop *del)
-{
-    struct backend_timeout_handle *itr = del->timeout_list.lh_first;
-
-    while (itr != NULL) {
-        printf("%lu\n", itr->timeout_clock);
-        itr = itr->timeout_next.le_next;
-    }
-    printf("\n");
-}
-
 void backend_event_loop_insert_timeout(struct backend_event_loop *del,
                                    struct backend_timeout_handle *handle)
 {
