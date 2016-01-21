@@ -99,11 +99,9 @@ struct portpilot_pkt {
 }__attribute((packed))__;
 
 //Functions for updating the reference counter and starting/stopping the
-//iteration callback
+//iteration callback (we only want to run it on every iteration when device
+//reading has failed)
 void portpilot_logger_start_itr_cb(struct portpilot_ctx *pp_ctx);
 void portpilot_logger_stop_itr_cb(struct portpilot_ctx *pp_ctx);
-
-//TODO: Move to different file
-void portpilot_start_reading_data(struct portpilot_dev *pp_dev);
 
 #endif

@@ -167,6 +167,7 @@ static uint8_t portpilot_start(uint32_t num_pkts, const char *serial_number,
     }
 
     //Restart event loop in order to wait for cancelled transfers
+    //TODO: Consider what to do with event loop
     backend_event_loop_remove_timeout(ppc->itr_timeout_handle);
 
     if (ppc->output_timeout_handle)

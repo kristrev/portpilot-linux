@@ -45,7 +45,8 @@ static uint8_t portpilot_helpers_get_serial_num(libusb_device *device,
     return RETVAL_SUCCESS;
 }
 
-//Get the indexes of the HID interface
+//Get the indexes of the first HID interface. It is this interface we use to
+//communicate with the Portpilot
 uint8_t portpilot_helpers_get_hid_idx(const struct libusb_config_descriptor *conf_desc,
         uint8_t *conf_desc_idx, int32_t *intf_desc_idx)
 {
@@ -71,7 +72,7 @@ uint8_t portpilot_helpers_get_hid_idx(const struct libusb_config_descriptor *con
     return RETVAL_FAILURE;
 }
 
-//Get the info on the input endpoint (the one we read from)
+//Get the info on the input endpoint (the ones we read from)
 uint8_t portpilot_helpers_get_input_info(const struct libusb_interface_descriptor *intf_desc,
         uint8_t *input_endpoint, uint16_t *max_packet_size)
 {
@@ -185,12 +186,10 @@ uint8_t portpilot_helpers_create_dev(libusb_device *device,
     memcpy(pp_dev->path, dev_path, dev_path_len);
     pp_dev->path_len = dev_path_len;
 
-    //Will be a list insert
     pp_dev->pp_ctx = pp_ctx;
     LIST_INSERT_HEAD(&(pp_dev->pp_ctx->dev_head), pp_dev, next_dev);
     ++pp_ctx->dev_list_len;
 
-    //Ready to start reading
     fprintf(stdout, "Ready to start reading on device %s\n",
             pp_dev->serial_number);
 
@@ -304,7 +303,9 @@ uint8_t portpilot_helpers_free_ctx(struct portpilot_ctx *pp_ctx, uint8_t force)
         ppd_tmp = ppd_itr;
         ppd_itr = ppd_itr->next_dev.le_next;
 
-        //We are only allowed to free memory if transfer is cancelled
+        //We are only allowed to free memory if transfer is cancelled, so check
+        //for this and indicate to loop if we need to wait for cancelled
+        //transfers
         if (force || (ppd_tmp->transfer &&
                 libusb_cancel_transfer(ppd_tmp->transfer) ==
                 LIBUSB_ERROR_NOT_FOUND)) {
@@ -331,6 +332,8 @@ uint8_t portpilot_helpers_free_ctx(struct portpilot_ctx *pp_ctx, uint8_t force)
 
 void portpilot_helpers_stop_loop(struct portpilot_ctx *pp_ctx)
 {
+    //TODO: Consider how to handle removal of devices when we are going to read
+    //a specified number of packets
     if (pp_ctx->dev_list_len && pp_ctx->num_done_read == pp_ctx->dev_list_len)
         backend_event_loop_stop(pp_ctx->event_loop);
 }
@@ -342,7 +345,6 @@ void portpilot_helpers_output_data(struct portpilot_dev *pp_dev,
     const uint8_t *serial_number = pp_dev->serial_number ?
         pp_dev->serial_number : (const uint8_t *) "";
 
-    //Add to writer
     if (pp_ctx->csv_output) 
         fprintf(stdout, "%s,%u,%u,%u,%u,%u,%u,%u\n",
             serial_number,

@@ -38,8 +38,9 @@ void portpilot_cb_itr_cb(void *ptr)
     //Run libusb timers
     libusb_handle_events_timeout_completed(NULL, &tv, NULL);
 
-    //Safety in case more than one device was connected and one is disconnected
-    //after all the others have finished receiving packets
+    //Check if we should stop loop, in case more than one device was connected
+    //and one is disconnected after all the others have finished receiving
+    //packets
     portpilot_helpers_stop_loop(pp_ctx);
 
     if (!pp_ctx->num_itr_req)
@@ -122,6 +123,7 @@ static void portpilot_cb_handle_event_added(libusb_device *device,
         return;
     }
 
+    //Get the index of the HID interface, it is this interface we read from
     retval = portpilot_helpers_get_hid_idx(conf_desc, &conf_desc_idx,
             &intf_desc_idx);
 
@@ -135,6 +137,7 @@ static void portpilot_cb_handle_event_added(libusb_device *device,
             altsetting[intf_desc_idx]);
     intf_num = intf_desc->bInterfaceNumber;
 
+    //Get the endpoint for the interface we will communicate with
     retval = portpilot_helpers_get_input_info(intf_desc, &input_endpoint,
             &max_packet_size);
 
@@ -200,6 +203,8 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
         libusb_submit_transfer(transfer);
         return;
     case LIBUSB_TRANSFER_CANCELLED:
+        //We only get here if we have cancelled device, thus, we don't need any
+        //additional guards
         if (++pp_ctx->num_cancelled == pp_ctx->num_cancel)
             backend_event_loop_stop(pp_ctx->event_loop);
         return;
@@ -209,7 +214,7 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
         return;
     }
 
-    //I sometimes see replies that are 0 length, ignore those and just
+    //We sometimes see replies that are 0 length, ignore those and just
     //re-submit transfer
     if (!transfer->actual_length) {
         libusb_submit_transfer(transfer);
@@ -222,7 +227,8 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
         fprintf(stdout, "%x\n", transfer->buffer[i]);
     }
    
-    //Fill structure
+    //We ignore the direction of the V, A and use absolute values to get a
+    //correct sum
     data_ptr->tstamp = pp_pkt->tstamp;
     data_ptr->v_in += pp_pkt->v_in >= 0 ? pp_pkt->v_in :
         (pp_pkt->v_in * -1);
@@ -248,6 +254,7 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
 
     portpilot_helpers_output_data(pp_dev, data_ptr);
 
+    //Only submit transfer if we have not exceeded packet limit
     if (!portpilot_helpers_inc_num_pkts(pp_dev))
         libusb_submit_transfer(transfer);
 }
