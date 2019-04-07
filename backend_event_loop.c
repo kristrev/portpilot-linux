@@ -21,6 +21,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <libusb-1.0/libusb.h>
 
 #include "backend_event_loop.h"
 
@@ -172,7 +173,7 @@ void backend_event_loop_run(struct backend_event_loop *del)
    
     del->stop = 0;
 
-    while(1){
+    while (1){
         if (del->stop)
             return;
 

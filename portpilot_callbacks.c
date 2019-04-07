@@ -53,7 +53,9 @@ void portpilot_cb_itr_cb(void *ptr)
     struct portpilot_dev *ppd_itr = pp_ctx->dev_head.lh_first;
 
     //Run libusb timers
+    libusb_unlock_events(NULL);
     libusb_handle_events_timeout_completed(NULL, &tv, NULL);
+    libusb_lock_events(NULL);
 
     //Check if we should stop loop, in case more than one device was connected
     //and one is disconnected after all the others have finished receiving
@@ -70,7 +72,6 @@ void portpilot_cb_itr_cb(void *ptr)
 
         ppd_itr = ppd_itr->next_dev.le_next;
     }
-
 }
 
 void portpilot_cb_output_cb(void *ptr)
@@ -98,7 +99,10 @@ void portpilot_cb_cancel_cb(void *ptr)
 void portpilot_cb_event_cb(void *ptr, int32_t fd, uint32_t events)
 {
     struct timeval tv = {0 ,0};
+
+    libusb_unlock_events(NULL);
     libusb_handle_events_timeout_completed(NULL, &tv, NULL);
+    libusb_lock_events(NULL);
 }
 
 static void portpilot_cb_handle_event_left(struct portpilot_ctx *pp_ctx,
@@ -272,6 +276,7 @@ void portpilot_cb_read_cb(struct libusb_transfer *transfer)
     portpilot_helpers_output_data(pp_dev, data_ptr);
 
     //Only submit transfer if we have not exceeded packet limit
-    if (!portpilot_helpers_inc_num_pkts(pp_dev))
+    if (!portpilot_helpers_inc_num_pkts(pp_dev)) {
         libusb_submit_transfer(transfer);
+    }
 }
